@@ -1,73 +1,76 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import * as multipart from '@fastify/multipart';
+import * as cluster from 'cluster';
+import * as os from 'os';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    new FastifyAdapter({ logger: true }),
-  );
+  const logger = new Logger('Bootstrap');
+  const isProduction = process.env.NODE_ENV === 'production';
 
-  await app.register(multipart, {
-    limits: { fileSize: 5 * 1024 * 1024 },
-  });
+  // Lógica del Cluster "Seguro" para Render Free
+  // @ts-ignore
+  if (cluster.isPrimary && isProduction) {
+    const detectedCPUs = os.cpus().length;
+    // LIMITAMOS A 2 WORKERS PARA NO AGOTAR LA RAM DE 512MB
+    const maxSafeWorkers = 2;
+    const numWorkers = Math.min(detectedCPUs, maxSafeWorkers);
 
-  app.enableCors();
+    logger.log(`Primary server started. Detected CPUs: ${detectedCPUs}. Starting ${numWorkers} workers (Safe Mode)...`);
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+    for (let i = 0; i < numWorkers; i++) {
+      // @ts-ignore
+      cluster.fork();
+    }
 
-  app.setGlobalPrefix('api');
+    // @ts-ignore
+    cluster.on('exit', (worker, code, signal) => {
+      logger.warn(`Worker ${worker.process.pid} died. Restarting...`);
+      // @ts-ignore
+      cluster.fork();
+    });
+  } else {
+    // Lógica normal de la App (Worker)
+    const app = await NestFactory.create<NestFastifyApplication>(
+      AppModule,
+      new FastifyAdapter({ logger: true }),
+    );
 
-  const configService = app.get(ConfigService);
+    await app.register(multipart, {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    });
 
-  const config = new DocumentBuilder()
-    .setTitle(process.env.npm_package_name || 'API')
-    .setDescription('Documentación completa de la API REST')
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Ingresa tu token JWT',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
-    .addTag('Autenticación', 'Endpoints de login, registro y gestión de usuarios')
-    .addTag('Upload', 'Endpoints para subida de imágenes')
-    .build();
+    app.enableCors();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    customSiteTitle: 'API Documentation',
-    customfavIcon: 'https://nestjs.com/img/logo-small.svg',
-    customJs: [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-standalone-preset.min.js',
-    ],
-    customCssUrl: [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-standalone-preset.min.css',
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.css',
-    ],
-  });
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
 
-  const port = process.env.PORT || configService.get<number>('PORT') || 3000;
-  await app.listen(port, '0.0.0.0');
-  
-  console.log('\n🚀 API: http://localhost:' + port + '/api');
-  console.log('📚 Swagger: http://localhost:' + port + '/api/docs\n');
+    app.setGlobalPrefix('api');
+    const configService = app.get(ConfigService);
+
+    const config = new DocumentBuilder()
+      .setTitle('ReparaFacil API')
+      .setDescription('Documentación API REST - Grupo 8')
+      .setVersion('1.0')
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT-auth')
+      .addTag('Endpoints')
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+
+    const port = process.env.PORT || configService.get<number>('PORT') || 3000;
+    await app.listen(port, '0.0.0.0');
+    logger.log(`Worker ${process.pid} listening on port ${port}`);
+  }
 }
 bootstrap();
