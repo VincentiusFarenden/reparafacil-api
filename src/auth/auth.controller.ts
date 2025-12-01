@@ -48,7 +48,7 @@ export class AuthController {
     const result = await this.authService.register(mappedDto);
 
     // Obtener perfil completo
-    const userId = result.user._id.toString();
+    const userId = (result.user as any)._id.toString();
     const fullProfile = await this.authService.getFullProfile(userId);
 
     // Retornar en formato que Android espera
@@ -91,7 +91,7 @@ export class AuthController {
     const result = await this.authService.login(loginDto);
 
     // Obtener perfil completo
-    const userId = result.user._id.toString();
+    const userId = (result.user as any)._id.toString();
     const fullProfile = await this.authService.getFullProfile(userId);
 
     // Retornar en formato que Android espera

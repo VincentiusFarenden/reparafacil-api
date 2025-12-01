@@ -163,13 +163,13 @@ export class AuthService implements OnModuleInit {
       email: userObject.email,
       nombre: profileData.nombre || 'Sin nombre',
       telefono: profileData.telefono || null,
-      rol: user.role, // Android espera "rol" no "role"
+      rol: user.role,
       direccion: profileData.direccion || null,
       especialidad: profileData.especialidad || null,
       certificaciones: profileData.certificaciones || null,
       activo: userObject.isActive,
-      createdAt: userObject.createdAt,
-      updatedAt: userObject.updatedAt,
+      createdAt: (userObject as any).createdAt,
+      updatedAt: (userObject as any).updatedAt,
     };
   }
 
