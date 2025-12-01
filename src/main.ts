@@ -17,9 +17,9 @@ async function bootstrap() {
   if (cluster.isPrimary && isProduction) {
     const detectedCPUs = os.cpus().length;
     // LIMITAMOS A 2 WORKERS PARA NO AGOTAR LA RAM DE 512MB
-    const maxSafeWorkers = 2;
+    const maxSafeWorkers = 2; 
     const numWorkers = Math.min(detectedCPUs, maxSafeWorkers);
-
+    
     logger.log(`Primary server started. Detected CPUs: ${detectedCPUs}. Starting ${numWorkers} workers (Safe Mode)...`);
 
     for (let i = 0; i < numWorkers; i++) {
