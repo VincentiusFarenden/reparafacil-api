@@ -4,10 +4,6 @@ import { Role } from '../enums/roles.enum';
 
 export type UserDocument = User & Document;
 
-/**
- * User - Solo maneja autenticación y autorización
- * Los datos de negocio están en los Profiles correspondientes
- */
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true })

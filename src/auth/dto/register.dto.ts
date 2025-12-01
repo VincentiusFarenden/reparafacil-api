@@ -1,62 +1,70 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsArray,
   IsEmail,
-  IsEnum,
   IsNotEmpty,
-  IsOptional,
   IsString,
   MinLength,
+  IsOptional,
+  IsArray,
+  IsEnum,
   ValidateIf,
 } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '../enums/roles.enum';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'usuario@example.com', description: 'Email del usuario' })
-  @IsNotEmpty()
-  @IsEmail()
+  @ApiProperty({ example: 'usuario@ejemplo.com' })
+  @IsEmail({}, { message: 'Email inválido' })
+  @IsNotEmpty({ message: 'El email es requerido' })
   email: string;
 
-  @ApiProperty({ example: 'password123', description: 'Contraseña', minLength: 6 })
-  @IsNotEmpty()
+  @ApiProperty({ example: 'Password123' })
   @IsString()
-  @MinLength(6)
+  @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
+  @IsNotEmpty({ message: 'La contraseña es requerida' })
   password: string;
 
-  // --- CORRECCIÓN AQUÍ ---
-  @ApiPropertyOptional({
-    example: Role.CLIENTE,
-    description: 'Rol del usuario (Opcional, defecto CLIENTE)',
-    enum: Role, // Usamos el Enum completo para Swagger
-  })
-  @IsOptional()
-  @IsEnum(Role) // Usamos el Enum directo, es más compatible
-  role?: Role;
-  // -----------------------
-
-  @ApiProperty({ example: 'Juan Pérez', description: 'Nombre completo' })
-  @IsNotEmpty()
+  @ApiProperty({ example: 'Juan Pérez' })
   @IsString()
+  @IsNotEmpty({ message: 'El nombre es requerido' })
   nombre: string;
 
-  @ApiPropertyOptional({ example: '+51 987654321', description: 'Teléfono' })
-  @IsOptional()
+  @ApiPropertyOptional({ example: '+56912345678' })
   @IsString()
+  @IsOptional()
   telefono?: string;
 
-  @ApiPropertyOptional({ example: 'Av. Principal 123', description: 'Dirección' })
-  @IsOptional()
+  @ApiProperty({ 
+    example: 'cliente',
+    enum: Role,
+    description: 'Rol del usuario: cliente o tecnico'
+  })
+  @IsEnum(Role, { message: 'Rol inválido. Debe ser "cliente" o "tecnico"' })
+  @IsNotEmpty({ message: 'El rol es requerido' })
+  // IMPORTANTE: Android envía "rol" pero nuestro backend usa "role"
+  // Lo mapeamos en el controller
+  rol: string;
+
+  @ApiPropertyOptional({ example: 'Calle 123, Santiago' })
   @IsString()
+  @IsOptional()
   direccion?: string;
 
-  @ApiPropertyOptional({ example: 'Reparación de PCs', description: 'Especialidad (Solo Técnicos)' })
-  @ValidateIf((o) => o.role === Role.TECNICO)
-  @IsNotEmpty({ message: 'La especialidad es requerida para el rol TECNICO' })
+  @ApiPropertyOptional({ 
+    example: 'Reparación de electrodomésticos',
+    description: 'Requerido si el rol es "tecnico"'
+  })
   @IsString()
+  @IsOptional()
   especialidad?: string;
 
-  @ApiPropertyOptional({ example: ['Certificado A+'], description: 'Certificaciones' })
-  @IsOptional()
+  @ApiPropertyOptional({ 
+    example: ['Certificado A', 'Certificado B'],
+    type: [String]
+  })
   @IsArray()
+  @IsOptional()
   certificaciones?: string[];
+
+  // Campo interno que usará el backend
+  role?: Role;
 }

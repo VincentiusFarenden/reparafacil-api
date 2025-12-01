@@ -43,21 +43,18 @@ export class AuthService implements OnModuleInit {
       throw new ConflictException('El email ya está registrado');
     }
 
-    // Si no envían rol, asignamos CLIENTE por defecto
     const userRole = registerDto.role || Role.CLIENTE;
-
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
     // 1. Crear User
     const newUser = await this.userModel.create({
       email: registerDto.email,
       password: hashedPassword,
-      role: userRole as string, // <--- CORRECCIÓN 1: 'as string' para que no marque error de tipo
+      role: userRole as string,
     });
 
     try {
       // 2. Crear Profile según el rol
-      // CORRECCIÓN 2: (newUser as any)._id permite acceder al ID sin que TypeScript se queje
       const userId = (newUser as any)._id.toString();
 
       switch (userRole) {
@@ -73,7 +70,7 @@ export class AuthService implements OnModuleInit {
             nombreCompleto: registerDto.nombre,
             telefono: registerDto.telefono,
             especialidad: registerDto.especialidad,
-            certificaciones: registerDto.certificaciones,
+            certificaciones: registerDto.certificaciones || [],
           });
           break;
       }
@@ -86,7 +83,7 @@ export class AuthService implements OnModuleInit {
         access_token: this.generateToken(userObject),
       };
     } catch (error) {
-      // Rollback: Si falla el perfil, borramos el usuario usando (newUser as any)._id
+      // Rollback: Si falla el perfil, borramos el usuario
       await this.userModel.findByIdAndDelete((newUser as any)._id);
       throw error;
     }
@@ -124,8 +121,59 @@ export class AuthService implements OnModuleInit {
     return userWithoutPassword;
   }
 
+  // NUEVO: Método para obtener perfil completo con datos del profile
+  async getFullProfile(userId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    const userObject = user.toObject();
+    let profileData: any = {};
+
+    try {
+      // Obtener datos del profile según el rol
+      if (user.role === Role.CLIENTE) {
+        const clienteProfile = await this.clienteProfileService.findByUserId(userId);
+        if (clienteProfile) {
+          profileData = {
+            nombre: clienteProfile.nombre,
+            telefono: clienteProfile.telefono,
+            direccion: clienteProfile.direccion,
+          };
+        }
+      } else if (user.role === Role.TECNICO) {
+        const tecnicoProfile = await this.tecnicoProfileService.findByUserId(userId);
+        if (tecnicoProfile) {
+          profileData = {
+            nombre: tecnicoProfile.nombreCompleto,
+            telefono: tecnicoProfile.telefono,
+            especialidad: tecnicoProfile.especialidad,
+            certificaciones: tecnicoProfile.certificaciones || [],
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error al obtener profile:', error);
+    }
+
+    // Retornar en formato que Android espera
+    return {
+      _id: userObject._id,
+      email: userObject.email,
+      nombre: profileData.nombre || 'Sin nombre',
+      telefono: profileData.telefono || null,
+      rol: user.role, // Android espera "rol" no "role"
+      direccion: profileData.direccion || null,
+      especialidad: profileData.especialidad || null,
+      certificaciones: profileData.certificaciones || null,
+      activo: userObject.isActive,
+      createdAt: userObject.createdAt,
+      updatedAt: userObject.updatedAt,
+    };
+  }
+
   private generateToken(user: any): string {
-    // CORRECCIÓN 3: Aseguramos que accedemos al _id correctamente
     const id = user._id ? user._id.toString() : (user as any).id;
     
     const payload = {

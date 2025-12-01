@@ -6,12 +6,12 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { CreateProductorUserDto } from './dto/create-productor-user.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
@@ -25,15 +25,54 @@ import { RolesGuard } from './guards/roles.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // NUEVO: Endpoint /auth/signup que Android espera
+  @Public()
+  @Post('signup')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Registrar nuevo usuario (CLIENTE o TÉCNICO)' })
+  @ApiBody({ type: RegisterDto })
+  @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente' })
+  @ApiResponse({ status: 409, description: 'El email ya está registrado' })
+  async signup(@Body() registerDto: RegisterDto) {
+    // Mapear "rol" (de Android) a "role" (del backend)
+    const mappedDto = {
+      ...registerDto,
+      role: this.mapRolToRole(registerDto.rol),
+    };
+
+    // Validar especialidad para técnicos
+    if (mappedDto.role === Role.TECNICO && !registerDto.especialidad) {
+      throw new BadRequestException('La especialidad es requerida para técnicos');
+    }
+
+    const result = await this.authService.register(mappedDto);
+
+    // Obtener perfil completo
+    const userId = result.user._id.toString();
+    const fullProfile = await this.authService.getFullProfile(userId);
+
+    // Retornar en formato que Android espera
+    return {
+      authToken: result.access_token,
+      user: fullProfile,
+    };
+  }
+
+  // MANTENER: Endpoint /auth/register (por compatibilidad)
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Registrar nuevo CLIENTE'})
+  @ApiOperation({ summary: 'Registrar nuevo CLIENTE' })
   @ApiBody({ type: RegisterDto })
-  @ApiResponse({ status: 201, description: 'Endpoint público para auto-registro de clientes. Solo se pueden registrar como CLIENTE.'})
+  @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente' })
   @ApiResponse({ status: 409, description: 'El email ya está registrado' })
   async register(@Body() registerDto: RegisterDto) {
-    const result = await this.authService.register(registerDto);
+    const mappedDto = {
+      ...registerDto,
+      role: this.mapRolToRole(registerDto.rol),
+    };
+
+    const result = await this.authService.register(mappedDto);
     return {
       success: true,
       message: 'Usuario registrado exitosamente',
@@ -50,13 +89,30 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
   async login(@Body() loginDto: LoginDto) {
     const result = await this.authService.login(loginDto);
+
+    // Obtener perfil completo
+    const userId = result.user._id.toString();
+    const fullProfile = await this.authService.getFullProfile(userId);
+
+    // Retornar en formato que Android espera
     return {
-      success: true,
-      message: 'Inicio de sesión exitoso',
-      data: result,
+      authToken: result.access_token,
+      user: fullProfile,
     };
   }
 
+  // NUEVO: Endpoint /auth/me que Android espera
+  @Get('me')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Obtener perfil del usuario actual' })
+  @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  async getMe(@CurrentUser() user: any) {
+    const fullProfile = await this.authService.getFullProfile(user.userId);
+    return fullProfile;
+  }
+
+  // MANTENER: Endpoint /auth/profile (por compatibilidad)
   @Get('profile')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Obtener perfil del usuario actual' })
@@ -82,5 +138,15 @@ export class AuthController {
       success: true,
       data: users,
     };
+  }
+
+  // Método auxiliar para mapear roles
+  private mapRolToRole(rol: string): Role {
+    const roleMap = {
+      'cliente': Role.CLIENTE,
+      'tecnico': Role.TECNICO,
+      'admin': Role.ADMIN,
+    };
+    return roleMap[rol?.toLowerCase()] || Role.CLIENTE;
   }
 }
