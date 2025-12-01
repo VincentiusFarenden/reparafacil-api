@@ -6,10 +6,7 @@ import {
   MinLength,
   IsOptional,
   IsArray,
-  IsEnum,
-  ValidateIf,
 } from 'class-validator';
-import { Role } from '../enums/roles.enum';
 
 export class RegisterDto {
   @ApiProperty({ example: 'usuario@ejemplo.com' })
@@ -35,13 +32,10 @@ export class RegisterDto {
 
   @ApiProperty({ 
     example: 'cliente',
-    enum: Role,
     description: 'Rol del usuario: cliente o tecnico'
   })
-  @IsEnum(Role, { message: 'Rol inválido. Debe ser "cliente" o "tecnico"' })
+  @IsString()
   @IsNotEmpty({ message: 'El rol es requerido' })
-  // IMPORTANTE: Android envía "rol" pero nuestro backend usa "role"
-  // Lo mapeamos en el controller
   rol: string;
 
   @ApiPropertyOptional({ example: 'Calle 123, Santiago' })
@@ -64,7 +58,4 @@ export class RegisterDto {
   @IsArray()
   @IsOptional()
   certificaciones?: string[];
-
-  // Campo interno que usará el backend
-  role?: Role;
 }

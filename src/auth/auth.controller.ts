@@ -34,18 +34,22 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente' })
   @ApiResponse({ status: 409, description: 'El email ya está registrado' })
   async signup(@Body() registerDto: RegisterDto) {
-    // Mapear "rol" (de Android) a "role" (del backend)
-    const mappedDto = {
-      ...registerDto,
-      role: this.mapRolToRole(registerDto.rol),
-    };
+    // Extraer campos y mapear rol → role
+    const { rol, ...rest } = registerDto;
+    const role = this.mapRolToRole(rol);
 
     // Validar especialidad para técnicos
-    if (mappedDto.role === Role.TECNICO && !registerDto.especialidad) {
+    if (role === Role.TECNICO && !registerDto.especialidad) {
       throw new BadRequestException('La especialidad es requerida para técnicos');
     }
 
-    const result = await this.authService.register(mappedDto);
+    // Crear objeto con role (no rol)
+    const mappedDto = {
+      ...rest,
+      role,
+    };
+
+    const result = await this.authService.register(mappedDto as any);
 
     // Obtener perfil completo
     const userId = (result.user as any)._id.toString();
@@ -67,12 +71,15 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente' })
   @ApiResponse({ status: 409, description: 'El email ya está registrado' })
   async register(@Body() registerDto: RegisterDto) {
+    const { rol, ...rest } = registerDto;
+    const role = this.mapRolToRole(rol);
+
     const mappedDto = {
-      ...registerDto,
-      role: this.mapRolToRole(registerDto.rol),
+      ...rest,
+      role,
     };
 
-    const result = await this.authService.register(mappedDto);
+    const result = await this.authService.register(mappedDto as any);
     return {
       success: true,
       message: 'Usuario registrado exitosamente',
