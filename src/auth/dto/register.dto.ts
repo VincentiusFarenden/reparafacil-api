@@ -11,77 +11,52 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '../enums/roles.enum';
 
-/**
- * DTO para registro de usuarios
- * Crea User + Profile correspondiente según el rol
- */
 export class RegisterDto {
-  @ApiProperty({
-    example: 'usuario@example.com',
-    description: 'Email del usuario',
-  })
+  @ApiProperty({ example: 'usuario@example.com', description: 'Email del usuario' })
   @IsNotEmpty()
   @IsEmail()
   email: string;
 
-  @ApiProperty({
-    example: 'password123',
-    description: 'Contraseña (mínimo 6 caracteres)',
-    minLength: 6,
-  })
+  @ApiProperty({ example: 'password123', description: 'Contraseña', minLength: 6 })
   @IsNotEmpty()
   @IsString()
   @MinLength(6)
   password: string;
 
-  @ApiProperty({
+  // --- CORRECCIÓN AQUÍ ---
+  @ApiPropertyOptional({
     example: Role.CLIENTE,
-    description: 'Rol del usuario',
-    enum: [Role.CLIENTE, Role.TECNICO],
+    description: 'Rol del usuario (Opcional, defecto CLIENTE)',
+    enum: Role, // Usamos el Enum completo para Swagger
   })
-  @IsNotEmpty()
-  @IsEnum([Role.CLIENTE, Role.TECNICO])
-  role: Role;
+  @IsOptional()
+  @IsEnum(Role) // Usamos el Enum directo, es más compatible
+  role?: Role;
+  // -----------------------
 
-  @ApiProperty({
-    example: 'Juan Pérez',
-    description: 'Nombre completo',
-  })
+  @ApiProperty({ example: 'Juan Pérez', description: 'Nombre completo' })
   @IsNotEmpty()
   @IsString()
   nombre: string;
 
-  @ApiPropertyOptional({
-    example: '+51 987654321',
-    description: 'Teléfono de contacto',
-  })
+  @ApiPropertyOptional({ example: '+51 987654321', description: 'Teléfono' })
   @IsOptional()
   @IsString()
   telefono?: string;
 
-  @ApiPropertyOptional({
-    example: 'Av. Principal 123',
-    description: 'Dirección',
-  })
+  @ApiPropertyOptional({ example: 'Av. Principal 123', description: 'Dirección' })
   @IsOptional()
   @IsString()
   direccion?: string;
 
-  @ApiPropertyOptional({
-    example: 'Valor de ejemplo',
-    description: 'especialidad (para rol TECNICO)',
-  })
+  @ApiPropertyOptional({ example: 'Reparación de PCs', description: 'Especialidad (Solo Técnicos)' })
   @ValidateIf((o) => o.role === Role.TECNICO)
-  @IsNotEmpty({ message: 'especialidad es requerido para TECNICO' })
+  @IsNotEmpty({ message: 'La especialidad es requerida para el rol TECNICO' })
   @IsString()
   especialidad?: string;
 
-  @ApiPropertyOptional({
-    example: 'Valor de ejemplo',
-    description: 'certificaciones (opcional)',
-  })
+  @ApiPropertyOptional({ example: ['Certificado A+'], description: 'Certificaciones' })
   @IsOptional()
   @IsArray()
   certificaciones?: string[];
-
 }

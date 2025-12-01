@@ -33,48 +33,49 @@ export class AuthService implements OnModuleInit {
         password: hashedPassword,
         role: Role.ADMIN,
       });
-      console.log('✅ Usuario ADMIN creado: admin@sistema.com / Admin123456');
+      console.log('Usuario ADMIN creado');
     }
   }
 
-  /**
-   * Registro público - Crea User + Profile correspondiente según el rol
-   * Factory Pattern: Crea el tipo de profile según el rol
-   */
   async register(registerDto: RegisterDto) {
     const existingUser = await this.userModel.findOne({ email: registerDto.email });
     if (existingUser) {
       throw new ConflictException('El email ya está registrado');
     }
 
+    // Si no envían rol, asignamos CLIENTE por defecto
+    const userRole = registerDto.role || Role.CLIENTE;
+
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
-    // 1. Crear User (solo autenticación)
+    // 1. Crear User
     const newUser = await this.userModel.create({
       email: registerDto.email,
       password: hashedPassword,
-      role: registerDto.role,
+      role: userRole as string, // <--- CORRECCIÓN 1: 'as string' para que no marque error de tipo
     });
 
     try {
-      // 2. Crear Profile según el rol (Factory Pattern)
-      const userId = (newUser._id as any).toString();
+      // 2. Crear Profile según el rol
+      // CORRECCIÓN 2: (newUser as any)._id permite acceder al ID sin que TypeScript se queje
+      const userId = (newUser as any)._id.toString();
 
-      switch (registerDto.role) {
-      case Role.CLIENTE:
-        await this.clienteProfileService.create(userId, {
-          nombre: registerDto.nombre,
-          telefono: registerDto.telefono,
-          direccion: registerDto.direccion,
-        });
-        break;
-      case Role.TECNICO:
-        await this.tecnicoProfileService.create(userId, {
-          nombreCompleto: registerDto.nombre,
-          telefono: registerDto.telefono,
-          especialidad: registerDto.especialidad,
-          certificaciones: registerDto.certificaciones,        });
-        break;
+      switch (userRole) {
+        case Role.CLIENTE:
+          await this.clienteProfileService.create(userId, {
+            nombre: registerDto.nombre,
+            telefono: registerDto.telefono,
+            direccion: registerDto.direccion,
+          });
+          break;
+        case Role.TECNICO:
+          await this.tecnicoProfileService.create(userId, {
+            nombreCompleto: registerDto.nombre,
+            telefono: registerDto.telefono,
+            especialidad: registerDto.especialidad,
+            certificaciones: registerDto.certificaciones,
+          });
+          break;
       }
 
       const userObject = newUser.toObject();
@@ -85,8 +86,8 @@ export class AuthService implements OnModuleInit {
         access_token: this.generateToken(userObject),
       };
     } catch (error) {
-      // Si falla la creación del profile, eliminar el user creado (rollback)
-      await this.userModel.findByIdAndDelete((newUser._id as any).toString());
+      // Rollback: Si falla el perfil, borramos el usuario usando (newUser as any)._id
+      await this.userModel.findByIdAndDelete((newUser as any)._id);
       throw error;
     }
   }
@@ -124,8 +125,11 @@ export class AuthService implements OnModuleInit {
   }
 
   private generateToken(user: any): string {
+    // CORRECCIÓN 3: Aseguramos que accedemos al _id correctamente
+    const id = user._id ? user._id.toString() : (user as any).id;
+    
     const payload = {
-      sub: user._id.toString(),
+      sub: id,
       email: user.email,
       role: user.role,
     };
