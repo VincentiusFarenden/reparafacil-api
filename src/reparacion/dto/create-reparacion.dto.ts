@@ -2,35 +2,23 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateReparacionDto {
-  @ApiProperty({
-    example: 'Nombre del Reparacion',
-    description: 'Nombre del Reparacion',
-  })
+  @ApiProperty({ example: 'Refrigerador' })
   @IsNotEmpty()
   @IsString()
-  nombre: string;
+  tipo: string;
 
-  @ApiPropertyOptional({
-    example: 'Descripción del Reparacion',
-    description: 'Descripción opcional',
-  })
-  @IsOptional()
+  @ApiProperty({ example: 'Av. Siempre Viva 123' })
+  @IsNotEmpty()
   @IsString()
-  descripcion?: string;
+  direccion: string;
 
-  @ApiPropertyOptional({
-    example: 'https://example.com/imagen.jpg',
-    description: 'URL de la imagen',
-  })
+  @ApiProperty({ example: 'No enfría' })
+  @IsNotEmpty()
+  @IsString()
+  descripcion: string;
+
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   imagen?: string;
-
-  @ApiPropertyOptional({
-    example: 'https://example.com/thumbnail.jpg',
-    description: 'URL del thumbnail',
-  })
-  @IsOptional()
-  @IsString()
-  imagenThumbnail?: string;
 }

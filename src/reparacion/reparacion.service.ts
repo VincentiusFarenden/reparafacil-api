@@ -11,50 +11,32 @@ export class ReparacionService {
     @InjectModel(Reparacion.name) private reparacionModel: Model<ReparacionDocument>,
   ) {}
 
-  // Recibe userId automáticamente
+  // Recibimos userId desde el controller
   async create(userId: string, createReparacionDto: CreateReparacionDto): Promise<Reparacion> {
-    const nuevaReparacion = await this.reparacionModel.create({
+    return this.reparacionModel.create({
       ...createReparacionDto,
-      cliente: new Types.ObjectId(userId), // Asigna el usuario logueado
+      cliente: new Types.ObjectId(userId), // Vinculación automática
       estado: 'solicitada',
       fechaServicio: new Date()
     });
-    return nuevaReparacion;
   }
 
   async findAll(): Promise<Reparacion[]> {
-    return this.reparacionModel.find()
-      .populate('cliente', 'email') // Solo traemos email del user
-      .sort({ createdAt: -1 });
+    return this.reparacionModel.find().populate('cliente', 'email');
   }
-  
-  // Buscar reparaciones de un cliente específico
+
+  // Buscar solo las reparaciones del usuario logueado
   async findByCliente(userId: string): Promise<Reparacion[]> {
-    return this.reparacionModel.find({ cliente: new Types.ObjectId(userId) })
-      .sort({ createdAt: -1 });
+    return this.reparacionModel.find({ cliente: new Types.ObjectId(userId) }).sort({ createdAt: -1 });
   }
 
   async findOne(id: string): Promise<Reparacion> {
-    const reparacion = await this.reparacionModel.findById(id)
-      .populate('cliente', 'email');
-    if (!reparacion) {
-      throw new NotFoundException(`Reparacion con ID ${id} no encontrado`);
-    }
+    const reparacion = await this.reparacionModel.findById(id).populate('cliente', 'email');
+    if (!reparacion) throw new NotFoundException(`Reparacion ${id} no encontrada`);
     return reparacion;
   }
 
-  async update(id: string, updateReparacionDto: UpdateReparacionDto): Promise<Reparacion> {
-    const reparacion = await this.reparacionModel.findByIdAndUpdate(id, updateReparacionDto, { new: true });
-    if (!reparacion) {
-      throw new NotFoundException(`Reparacion con ID ${id} no encontrado`);
-    }
-    return reparacion;
-  }
-
-  async remove(id: string): Promise<void> {
-    const result = await this.reparacionModel.findByIdAndDelete(id);
-    if (!result) {
-      throw new NotFoundException(`Reparacion con ID ${id} no encontrado`);
-    }
+  async update(id: string, updateDto: UpdateReparacionDto): Promise<Reparacion> {
+    return this.reparacionModel.findByIdAndUpdate(id, updateDto, { new: true });
   }
 }
