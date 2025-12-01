@@ -38,25 +38,29 @@ export class AuthService implements OnModuleInit {
   }
 
   async register(registerDto: RegisterDto) {
+    // 1. Verificar si existe el email
     const existingUser = await this.userModel.findOne({ email: registerDto.email });
     if (existingUser) {
       throw new ConflictException('El email ya está registrado');
     }
 
+    // 2. Determinar rol y hashear password
+    // Android envía "rol", aquí lo capturamos
     const userRole = registerDto.rol || Role.CLIENTE;
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
-    // 1. Crear User
+    // 3. Crear el Usuario Base (Auth)
     const newUser = await this.userModel.create({
       email: registerDto.email,
       password: hashedPassword,
-      role: userRole as string,
+      // Mapeamos 'rol' (DTO) a 'role' (Schema de BD)
+      role: userRole, 
     });
 
     try {
-      // 2. Crear Profile según el rol
       const userId = (newUser as any)._id.toString();
 
+      // 4. Crear el Perfil Específico según el Rol
       switch (userRole) {
         case Role.CLIENTE:
           await this.clienteProfileService.create(userId, {
@@ -65,9 +69,10 @@ export class AuthService implements OnModuleInit {
             direccion: registerDto.direccion,
           });
           break;
+
         case Role.TECNICO:
           await this.tecnicoProfileService.create(userId, {
-            nombreCompleto: registerDto.nombre,
+            nombreCompleto: registerDto.nombre, // Mapeamos nombre a nombreCompleto
             telefono: registerDto.telefono,
             especialidad: registerDto.especialidad,
             certificaciones: registerDto.certificaciones || [],
@@ -75,6 +80,7 @@ export class AuthService implements OnModuleInit {
           break;
       }
 
+      // 5. Retornar respuesta exitosa
       const userObject = newUser.toObject();
       const { password, ...userWithoutPassword } = userObject;
 
@@ -82,8 +88,11 @@ export class AuthService implements OnModuleInit {
         user: userWithoutPassword,
         access_token: this.generateToken(userObject),
       };
+
     } catch (error) {
-      // Rollback: Si falla el perfil, borramos el usuario
+      // ROLLBACK: Si falla la creación del perfil, borramos el usuario creado
+      // para evitar usuarios "huérfanos" sin perfil.
+      console.error('Error creando perfil, haciendo rollback del usuario:', error);
       await this.userModel.findByIdAndDelete((newUser as any)._id);
       throw error;
     }
@@ -111,6 +120,7 @@ export class AuthService implements OnModuleInit {
     };
   }
 
+  // Obtener solo datos de usuario (Auth)
   async getProfile(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) {
@@ -121,7 +131,7 @@ export class AuthService implements OnModuleInit {
     return userWithoutPassword;
   }
 
-  // NUEVO: Método para obtener perfil completo con datos del profile
+  // NUEVO: Obtener perfil completo fusionado (User + Profile) para Android
   async getFullProfile(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) {
@@ -157,13 +167,13 @@ export class AuthService implements OnModuleInit {
       console.error('Error al obtener profile:', error);
     }
 
-    // Retornar en formato que Android espera
+    // Retornar objeto plano como lo espera la App Android
     return {
       _id: userObject._id,
       email: userObject.email,
       nombre: profileData.nombre || 'Sin nombre',
       telefono: profileData.telefono || null,
-      rol: user.role,
+      rol: user.role, // Importante: devolvemos el rol
       direccion: profileData.direccion || null,
       especialidad: profileData.especialidad || null,
       certificaciones: profileData.certificaciones || null,

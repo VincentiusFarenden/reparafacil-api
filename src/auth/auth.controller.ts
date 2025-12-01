@@ -6,7 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  BadRequestException,
+  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -25,61 +25,73 @@ import { RolesGuard } from './guards/roles.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // NUEVO: Endpoint /auth/signup que Android espera
+  // ======================================================
+  // ENDPOINTS PARA ANDROID (APP MÓVIL)
+  // ======================================================
+
   @Public()
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Registrar nuevo usuario (CLIENTE o TÉCNICO)' })
+  @ApiOperation({ summary: 'Registrar usuario desde Android' })
   @ApiBody({ type: RegisterDto })
   @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente' })
   @ApiResponse({ status: 409, description: 'El email ya está registrado' })
   async signup(@Body() registerDto: RegisterDto) {
-    // Extraer campos y mapear rol → role
-    const { rol, ...rest } = registerDto;
-    const role = this.mapRolToRole(rol);
+    // 1. Llamamos al servicio (él se encarga de los roles y perfiles ahora)
+    const result = await this.authService.register(registerDto);
 
-    // Validar especialidad para técnicos
-    if (role === Role.TECNICO && !registerDto.especialidad) {
-      throw new BadRequestException('La especialidad es requerida para técnicos');
-    }
-
-    // Crear objeto con role (no rol)
-    const mappedDto = {
-      ...rest,
-      role,
-    };
-
-    const result = await this.authService.register(mappedDto as any);
-
-    // Obtener perfil completo
+    // 2. Obtenemos el perfil completo fusionado para devolverlo a la App
     const userId = (result.user as any)._id.toString();
     const fullProfile = await this.authService.getFullProfile(userId);
 
-    // Retornar en formato que Android espera
+    // 3. Retornamos la estructura EXACTA que espera Retrofit en Android
+    return {
+      authToken: result.access_token, // Android espera "authToken"
+      user: fullProfile,              // Android espera objeto "user"
+    };
+  }
+
+  @Public()
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Iniciar sesión desde Android' })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({ status: 200, description: 'Login exitoso' })
+  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
+  async login(@Body() loginDto: LoginDto) {
+    // 1. Validar credenciales
+    const result = await this.authService.login(loginDto);
+
+    // 2. Obtener perfil completo fusionado
+    const userId = (result.user as any)._id.toString();
+    const fullProfile = await this.authService.getFullProfile(userId);
+
+    // 3. Retornar estructura para Android
     return {
       authToken: result.access_token,
       user: fullProfile,
     };
   }
 
-  // MANTENER: Endpoint /auth/register (por compatibilidad)
+  @Get('me')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Obtener mi perfil completo' })
+  @ApiResponse({ status: 200, description: 'Perfil obtenido' })
+  async getMe(@CurrentUser() user: any) {
+    // Devuelve el objeto usuario fusionado con datos del perfil (dirección, etc.)
+    return this.authService.getFullProfile(user.userId);
+  }
+
+  // ======================================================
+  // ENDPOINTS LEGACY / WEB (Compatibilidad)
+  // ======================================================
+
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Registrar nuevo CLIENTE' })
-  @ApiBody({ type: RegisterDto })
-  @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente' })
-  @ApiResponse({ status: 409, description: 'El email ya está registrado' })
+  @ApiOperation({ summary: 'Registro Genérico (Web/Admin)' })
   async register(@Body() registerDto: RegisterDto) {
-    const { rol, ...rest } = registerDto;
-    const role = this.mapRolToRole(rol);
-
-    const mappedDto = {
-      ...rest,
-      role,
-    };
-
-    const result = await this.authService.register(mappedDto as any);
+    const result = await this.authService.register(registerDto);
     return {
       success: true,
       message: 'Usuario registrado exitosamente',
@@ -87,44 +99,9 @@ export class AuthController {
     };
   }
 
-  @Public()
-  @Post('login')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Iniciar sesión' })
-  @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'Inicio de sesión exitoso' })
-  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
-  async login(@Body() loginDto: LoginDto) {
-    const result = await this.authService.login(loginDto);
-
-    // Obtener perfil completo
-    const userId = (result.user as any)._id.toString();
-    const fullProfile = await this.authService.getFullProfile(userId);
-
-    // Retornar en formato que Android espera
-    return {
-      authToken: result.access_token,
-      user: fullProfile,
-    };
-  }
-
-  // NUEVO: Endpoint /auth/me que Android espera
-  @Get('me')
-  @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Obtener perfil del usuario actual' })
-  @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente' })
-  @ApiResponse({ status: 401, description: 'No autorizado' })
-  async getMe(@CurrentUser() user: any) {
-    const fullProfile = await this.authService.getFullProfile(user.userId);
-    return fullProfile;
-  }
-
-  // MANTENER: Endpoint /auth/profile (por compatibilidad)
   @Get('profile')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Obtener perfil del usuario actual' })
-  @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente' })
-  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiOperation({ summary: 'Obtener perfil básico' })
   async getProfile(@CurrentUser() user: any) {
     const profile = await this.authService.getProfile(user.userId);
     return {
@@ -136,24 +113,12 @@ export class AuthController {
   @Get('users')
   @Roles(Role.ADMIN)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Listar todos los usuarios (solo ADMIN)' })
-  @ApiResponse({ status: 200, description: 'Lista de usuarios' })
-  @ApiResponse({ status: 403, description: 'Acceso denegado - Solo administradores' })
+  @ApiOperation({ summary: 'Listar usuarios (Solo Admin)' })
   async getAllUsers() {
     const users = await this.authService.getAllUsers();
     return {
       success: true,
       data: users,
     };
-  }
-
-  // Método auxiliar para mapear roles
-  private mapRolToRole(rol: string): Role {
-    const roleMap = {
-      'cliente': Role.CLIENTE,
-      'tecnico': Role.TECNICO,
-      'admin': Role.ADMIN,
-    };
-    return roleMap[rol?.toLowerCase()] || Role.CLIENTE;
   }
 }
