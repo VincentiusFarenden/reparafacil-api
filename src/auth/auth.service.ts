@@ -43,7 +43,7 @@ export class AuthService implements OnModuleInit {
       throw new ConflictException('El email ya está registrado');
     }
 
-    const userRole = registerDto.role || Role.CLIENTE;
+    const userRole = registerDto.rol || Role.CLIENTE;
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
     // 1. Crear User
