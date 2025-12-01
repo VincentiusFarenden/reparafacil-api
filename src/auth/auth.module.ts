@@ -9,7 +9,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { User, UserSchema } from './schemas/user.schema';
-import { APP_GUARD } from '@nestjs/core';
 import { ClienteProfileModule } from '../cliente-profile/cliente-profile.module';
 import { TecnicoProfileModule } from '../tecnico-profile/tecnico-profile.module';
 
@@ -36,15 +35,9 @@ import { TecnicoProfileModule } from '../tecnico-profile/tecnico-profile.module'
   providers: [
     AuthService,
     JwtStrategy,
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard,
-    },
+    JwtAuthGuard,  // ← Solo como provider, NO como APP_GUARD
+    RolesGuard,    // ← Solo como provider, NO como APP_GUARD
   ],
-  exports: [AuthService],
+  exports: [AuthService, JwtAuthGuard, RolesGuard],  // ← Exportar para usar en otros módulos
 })
 export class AuthModule {}
