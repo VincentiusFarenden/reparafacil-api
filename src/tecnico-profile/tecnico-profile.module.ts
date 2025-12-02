@@ -20,4 +20,8 @@ import { TecnicoProfile, TecnicoProfileSchema } from '../tecnico-profile/schemas
   providers: [TecnicoService],
   exports: [TecnicoService],
 })
+<<<<<<< HEAD
+export class TecnicoProfileModule {}
+=======
 export class TecnicoModule {}
+>>>>>>> 7f1578ed06104a99b10323133f6b57b23089dc6a
