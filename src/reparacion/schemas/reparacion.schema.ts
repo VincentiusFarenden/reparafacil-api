@@ -5,34 +5,32 @@ export type ReparacionDocument = Reparacion & Document;
 
 @Schema({ timestamps: true })
 export class Reparacion {
-  // Conectamos con 'User' (Auth), no con 'Cliente' (Legacy)
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  cliente: Types.ObjectId;
-
-  @Prop({ type: Types.ObjectId, ref: 'User' })
-  tecnico: Types.ObjectId;
+  usuario: Types.ObjectId; // El cliente que solicita
 
   @Prop({ required: true })
-  tipo: string;
-
-  @Prop({ required: true })
-  direccion: string;
+  tipo: string; // Ej: Refrigerador, Lavadora
 
   @Prop({ required: true })
   descripcion: string;
 
-  @Prop({ default: 0 })
-  costo?: number;
+  @Prop({ required: true })
+  direccion: string;
 
-  @Prop({ 
-    enum: ['solicitada', 'asignada', 'en-proceso', 'completada', 'cancelada'], 
-    default: 'solicitada' 
-  })
-  estado?: string;
+  @Prop({ default: 'pendiente' }) // pendiente, en_progreso, completado, cancelado
+  estado: string;
 
   @Prop()
-  fechaServicio?: Date;
+  imagen?: string; // URL de la imagen (opcional)
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  tecnico?: Types.ObjectId; // Técnico asignado (opcional al inicio)
+
+  @Prop()
+  fechaVisita?: Date;
+
+  @Prop()
+  costoEstimado?: number;
 }
 
 export const ReparacionSchema = SchemaFactory.createForClass(Reparacion);
-ReparacionSchema.index({ cliente: 1 });
