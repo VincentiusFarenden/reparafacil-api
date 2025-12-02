@@ -13,10 +13,12 @@ import { UploadModule } from './upload/upload.module';
 import { ClienteProfileModule } from './cliente-profile/cliente-profile.module';
 import { TecnicoProfileModule } from './tecnico-profile/tecnico-profile.module';
 
-// Módulos de Negocio (Faltaban estos)
+// Módulos de Negocio
 import { ReparacionModule } from './reparacion/reparacion.module';
 import { AgendaModule } from './agenda/agenda.module';
 import { GarantiaModule } from './garantia/garantia.module';
+// --- IMPORTA EL TÉCNICO MODULE ---
+import { TecnicoModule } from './tecnico/tecnico.module';
 
 @Module({
   imports: [
@@ -51,9 +53,10 @@ import { GarantiaModule } from './garantia/garantia.module';
     UploadModule,
     ClienteProfileModule,
     TecnicoProfileModule,
-    ReparacionModule, // <--- CRÍTICO: Habilita /api/reparacion
-    AgendaModule,     // Habilita /api/agenda
-    GarantiaModule,   // Habilita /api/garantia
+    ReparacionModule,
+    AgendaModule,
+    GarantiaModule,
+    TecnicoModule, // <--- AGREGADO AQUÍ
   ],
   controllers: [AppController],
   providers: [

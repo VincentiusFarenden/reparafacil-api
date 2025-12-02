@@ -21,4 +21,10 @@ export class CreateReparacionDto {
   @IsOptional()
   @IsString()
   imagen?: string;
+
+  // --- NUEVO CAMPO ---
+  @ApiPropertyOptional({ example: 'ID_DEL_TECNICO_MONGO' })
+  @IsOptional()
+  @IsString()
+  tecnico?: string; 
 }
