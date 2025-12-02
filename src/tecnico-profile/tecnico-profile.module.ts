@@ -1,17 +1,23 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { TecnicoProfile, TecnicoProfileSchema } from './schemas/tecnico-profile.schema';
-import { TecnicoProfileService } from './tecnico-profile.service';
-import { TecnicoProfileController } from './tecnico-profile.controller';
+import { TecnicoService } from './tecnico.service';
+import { TecnicoController } from './tecnico.controller';
+import { UploadModule } from '../upload/upload.module';
+import { Tecnico, TecnicoSchema } from './schemas/tecnico.schema';
+// 1. Importar el Schema del Perfil
+import { TecnicoProfile, TecnicoProfileSchema } from '../tecnico-profile/schemas/tecnico-profile.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: TecnicoProfile.name, schema: TecnicoProfileSchema },
+      { name: Tecnico.name, schema: TecnicoSchema },
+      // 2. Registrar el modelo de perfil aquí también
+      { name: TecnicoProfile.name, schema: TecnicoProfileSchema }, 
     ]),
+    UploadModule,
   ],
-  controllers: [TecnicoProfileController],
-  providers: [TecnicoProfileService],
-  exports: [TecnicoProfileService],
+  controllers: [TecnicoController],
+  providers: [TecnicoService],
+  exports: [TecnicoService],
 })
-export class TecnicoProfileModule {}
+export class TecnicoModule {}

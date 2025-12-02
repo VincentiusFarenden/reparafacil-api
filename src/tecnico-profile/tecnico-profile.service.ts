@@ -1,48 +1,75 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { TecnicoProfile, TecnicoProfileDocument } from './schemas/tecnico-profile.schema';
-import { CreateTecnicoProfileDto } from './dto/create-tecnico-profile.dto';
-import { UpdateTecnicoProfileDto } from './dto/update-tecnico-profile.dto';
+import { Model } from 'mongoose';
+import { CreateTecnicoDto } from './dto/create-tecnico.dto';
+import { UpdateTecnicoDto } from './dto/update-tecnico.dto';
+import { Tecnico, TecnicoDocument } from './schemas/tecnico.schema';
+// Importar documento del perfil
+import { TecnicoProfile, TecnicoProfileDocument } from '../tecnico-profile/schemas/tecnico-profile.schema';
 
 @Injectable()
-export class TecnicoProfileService {
+export class TecnicoService {
   constructor(
-    @InjectModel(TecnicoProfile.name) private tecnicoprofileModel: Model<TecnicoProfileDocument>,
+    @InjectModel(Tecnico.name) private tecnicoModel: Model<TecnicoDocument>,
+    // Inyectar el modelo de Perfil
+    @InjectModel(TecnicoProfile.name) private tecnicoProfileModel: Model<TecnicoProfileDocument>,
   ) {}
 
-  async create(userId: string, dto: CreateTecnicoProfileDto): Promise<TecnicoProfile> {
-    const profile = await this.tecnicoprofileModel.create({
-      user: new Types.ObjectId(userId),
-      ...dto,
-    });
-    return profile;
+  async create(createTecnicoDto: CreateTecnicoDto): Promise<Tecnico> {
+    return this.tecnicoModel.create(createTecnicoDto);
   }
 
-  async findByUserId(userId: string): Promise<TecnicoProfile | null> {
-    return this.tecnicoprofileModel.findOne({ user: new Types.ObjectId(userId) }).populate('user', 'email role').exec();
+  // --- MODIFICADO: Leer desde Perfiles ---
+  async findAll(): Promise<any[]> {
+    // 1. Buscamos en los perfiles registrados por Auth
+    const perfiles = await this.tecnicoProfileModel.find().populate('usuario').exec();
+    
+    // 2. Mapeamos para que tenga el formato que espera la App (Tecnico)
+    return perfiles.map(perfil => ({
+      _id: perfil._id, // O perfil.usuario._id si prefieres usar el ID del usuario
+      nombre: perfil.nombreCompleto, // Mapeamos nombreCompleto -> nombre
+      email: (perfil.usuario as any)?.email || 'Sin email',
+      especialidad: perfil.especialidad,
+      telefono: perfil.telefono,
+      // Otros campos por defecto
+      calificacion: 0, 
+      imagen: ''
+    }));
   }
 
-  async findAll(): Promise<TecnicoProfile[]> {
-    return this.tecnicoprofileModel.find().populate('user', 'email role').exec();
-  }
-
-  async update(userId: string, dto: UpdateTecnicoProfileDto): Promise<TecnicoProfile> {
-    const profile = await this.tecnicoprofileModel.findOneAndUpdate(
-      { user: new Types.ObjectId(userId) },
-      { $set: dto },
-      { new: true },
-    );
-    if (!profile) {
-      throw new NotFoundException('Profile no encontrado');
+  async findOne(id: string): Promise<any> {
+    // Intentar buscar primero en perfiles
+    const perfil = await this.tecnicoProfileModel.findById(id).populate('usuario').exec();
+    if (perfil) {
+        return {
+            _id: perfil._id,
+            nombre: perfil.nombreCompleto,
+            email: (perfil.usuario as any)?.email,
+            especialidad: perfil.especialidad,
+            telefono: perfil.telefono
+        };
     }
-    return profile;
+
+    // Fallback a la colección antigua
+    const tecnico = await this.tecnicoModel.findById(id);
+    if (!tecnico) {
+      throw new NotFoundException(`Tecnico con ID ${id} no encontrado`);
+    }
+    return tecnico;
   }
 
-  async delete(userId: string): Promise<void> {
-    const result = await this.tecnicoprofileModel.deleteOne({ user: new Types.ObjectId(userId) });
-    if (result.deletedCount === 0) {
-      throw new NotFoundException('Profile no encontrado');
+  async update(id: string, updateTecnicoDto: UpdateTecnicoDto): Promise<Tecnico> {
+    const tecnico = await this.tecnicoModel.findByIdAndUpdate(id, updateTecnicoDto, { new: true });
+    if (!tecnico) {
+      throw new NotFoundException(`Tecnico con ID ${id} no encontrado`);
+    }
+    return tecnico;
+  }
+
+  async remove(id: string): Promise<void> {
+    const result = await this.tecnicoModel.findByIdAndDelete(id);
+    if (!result) {
+      throw new NotFoundException(`Tecnico con ID ${id} no encontrado`);
     }
   }
 }
