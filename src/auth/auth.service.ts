@@ -29,29 +29,35 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // CORRECCIÓN AQUÍ: Usamos 'role' en lugar de 'roles'
+    // 1. Crear el usuario base
     const user = await this.userModel.create({
       email,
       password: hashedPassword,
-      role: rol, // Antes decía: roles: [rol]
+      role: rol,
     });
 
-    // Crear perfil asociado según el rol
-    if (rol === Role.CLIENTE) {
-      await this.clienteProfileModel.create({
-        usuario: user._id,
-        nombre,
-        telefono: profileData.telefono,
-        direccion: profileData.direccion,
-      });
-    } else if (rol === Role.TECNICO) {
-      await this.tecnicoProfileModel.create({
-        usuario: user._id,
-        nombre,
-        telefono: profileData.telefono,
-        especialidad: profileData.especialidad,
-        certificaciones: profileData.certificaciones,
-      });
+    try {
+      // 2. Crear perfil asociado (CORREGIDO: 'user' en vez de 'usuario')
+      if (rol === Role.CLIENTE) {
+        await this.clienteProfileModel.create({
+          user: user._id, // <--- Aquí estaba el error
+          nombre,
+          telefono: profileData.telefono,
+          direccion: profileData.direccion,
+        });
+      } else if (rol === Role.TECNICO) {
+        await this.tecnicoProfileModel.create({
+          user: user._id, // <--- Aquí estaba el error
+          nombre,
+          telefono: profileData.telefono,
+          especialidad: profileData.especialidad,
+          certificaciones: profileData.certificaciones,
+        });
+      }
+    } catch (error) {
+      // ROLLBACK: Si falla crear el perfil, borramos el usuario para no dejar datos corruptos
+      await this.userModel.findByIdAndDelete(user._id);
+      throw new BadRequestException('Error al crear el perfil: ' + error.message);
     }
 
     const token = this.jwtService.sign({ sub: user._id, email: user.email, role: rol });
@@ -60,29 +66,29 @@ export class AuthService {
 
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
-    const user = await this.userModel.findOne({ email });
+    // Necesitamos el password explícitamente porque en el schema tiene select: false
+    const user = await this.userModel.findOne({ email }).select('+password');
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // CORRECCIÓN AQUÍ: Usamos 'user.role' directo (singular)
-    const role = user.role; // Antes decía: user.roles[0]
-    
+    const role = user.role;
     const token = this.jwtService.sign({ sub: user._id, email: user.email, role });
     return { authToken: token };
   }
 
-  // === MÉTODOS PARA PERFIL Y FOTO (Estos ya estaban bien, pero los incluyo completos) ===
+  // === MÉTODOS PARA PERFIL Y FOTO ===
 
   async getFullProfile(userPayload: any) {
     const { userId, role, email } = userPayload;
     let profileData: any = {};
 
+    // CORRECCIÓN: Usamos 'user' para buscar en la BD
     if (role === Role.CLIENTE) {
-      profileData = await this.clienteProfileModel.findOne({ usuario: userId }).lean();
+      profileData = await this.clienteProfileModel.findOne({ user: userId }).lean();
     } else if (role === Role.TECNICO) {
-      profileData = await this.tecnicoProfileModel.findOne({ usuario: userId }).lean();
+      profileData = await this.tecnicoProfileModel.findOne({ user: userId }).lean();
     }
 
     if (!profileData) {
@@ -104,14 +110,15 @@ export class AuthService {
   async updateProfilePhoto(userPayload: any, photoUrl: string) {
     const { userId, role } = userPayload;
 
+    // CORRECCIÓN: Usamos 'user' para buscar y actualizar
     if (role === Role.CLIENTE) {
       await this.clienteProfileModel.findOneAndUpdate(
-        { usuario: userId },
+        { user: userId },
         { fotoPerfil: photoUrl }
       );
     } else if (role === Role.TECNICO) {
       await this.tecnicoProfileModel.findOneAndUpdate(
-        { usuario: userId },
+        { user: userId },
         { fotoPerfil: photoUrl }
       );
     }
