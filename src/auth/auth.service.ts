@@ -28,10 +28,12 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // CORRECCIÓN AQUÍ: Usamos 'role' en lugar de 'roles'
     const user = await this.userModel.create({
       email,
       password: hashedPassword,
-      roles: [rol],
+      role: rol, // Antes decía: roles: [rol]
     });
 
     // Crear perfil asociado según el rol
@@ -64,12 +66,14 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const role = user.roles[0]; // Asumimos un rol principal
+    // CORRECCIÓN AQUÍ: Usamos 'user.role' directo (singular)
+    const role = user.role; // Antes decía: user.roles[0]
+    
     const token = this.jwtService.sign({ sub: user._id, email: user.email, role });
     return { authToken: token };
   }
 
-  // === MÉTODOS PARA PERFIL Y FOTO ===
+  // === MÉTODOS PARA PERFIL Y FOTO (Estos ya estaban bien, pero los incluyo completos) ===
 
   async getFullProfile(userPayload: any) {
     const { userId, role, email } = userPayload;
@@ -85,7 +89,6 @@ export class AuthService {
       return { id: userId, email, rol: role };
     }
 
-    // Retornamos un objeto plano unificado para la App
     return {
       id: userId,
       email,
@@ -94,7 +97,7 @@ export class AuthService {
       telefono: profileData.telefono,
       direccion: profileData.direccion,
       especialidad: profileData.especialidad,
-      fotoPerfil: profileData.fotoPerfil, // Campo clave para la imagen
+      fotoPerfil: profileData.fotoPerfil,
     };
   }
 
@@ -113,7 +116,6 @@ export class AuthService {
       );
     }
     
-    // Devolvemos el perfil actualizado
     return this.getFullProfile(userPayload);
   }
 }
