@@ -33,6 +33,7 @@ RUN apk add --no-cache \
 COPY package*.json ./
 
 # Instalar solo dependencias de producción
+RUN npm install -g node-gyp
 RUN npm ci --only=production
 
 # Copiar build desde builder stage
