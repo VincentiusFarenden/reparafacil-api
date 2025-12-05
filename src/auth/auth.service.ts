@@ -1,201 +1,119 @@
-import { Injectable, UnauthorizedException, ConflictException, OnModuleInit } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+import { User, UserDocument } from './schemas/user.schema';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { Role } from './enums/roles.enum';
-import { User, UserDocument } from './schemas/user.schema';
-import { ClienteProfileService } from '../cliente-profile/cliente-profile.service';
-import { TecnicoProfileService } from '../tecnico-profile/tecnico-profile.service';
+import { ClienteProfile } from '../cliente-profile/schemas/cliente-profile.schema';
+import { TecnicoProfile } from '../tecnico-profile/schemas/tecnico-profile.schema';
 
 @Injectable()
-export class AuthService implements OnModuleInit {
+export class AuthService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(ClienteProfile.name) private clienteProfileModel: Model<ClienteProfile>,
+    @InjectModel(TecnicoProfile.name) private tecnicoProfileModel: Model<TecnicoProfile>,
     private jwtService: JwtService,
-    private clienteProfileService: ClienteProfileService,
-    private tecnicoProfileService: TecnicoProfileService,
   ) {}
 
-  async onModuleInit() {
-    await this.createDefaultAdmin();
-  }
-
-  private async createDefaultAdmin() {
-    const existingAdmin = await this.userModel.findOne({ email: 'admin@sistema.com' });
-
-    if (!existingAdmin) {
-      const hashedPassword = await bcrypt.hash('Admin123456', 10);
-      await this.userModel.create({
-        email: 'admin@sistema.com',
-        password: hashedPassword,
-        role: Role.ADMIN,
-      });
-      console.log('Usuario ADMIN creado');
-    }
-  }
-
   async register(registerDto: RegisterDto) {
-    // 1. Verificar si existe el email
-    const existingUser = await this.userModel.findOne({ email: registerDto.email });
-    if (existingUser) {
-      throw new ConflictException('El email ya está registrado');
+    const { email, password, nombre, rol, ...profileData } = registerDto;
+
+    const emailExists = await this.userModel.findOne({ email });
+    if (emailExists) {
+      throw new BadRequestException('El correo ya está registrado');
     }
 
-    // 2. Determinar rol y hashear password
-    // Android envía "rol", aquí lo capturamos
-    const userRole = registerDto.rol || Role.CLIENTE;
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
-    // 3. Crear el Usuario Base (Auth)
-    const newUser = await this.userModel.create({
-      email: registerDto.email,
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await this.userModel.create({
+      email,
       password: hashedPassword,
-      // Mapeamos 'rol' (DTO) a 'role' (Schema de BD)
-      role: userRole, 
+      roles: [rol],
     });
 
-    try {
-      const userId = (newUser as any)._id.toString();
-
-      // 4. Crear el Perfil Específico según el Rol
-      switch (userRole) {
-        case Role.CLIENTE:
-          await this.clienteProfileService.create(userId, {
-            nombre: registerDto.nombre,
-            telefono: registerDto.telefono,
-            direccion: registerDto.direccion,
-          });
-          break;
-
-        case Role.TECNICO:
-          await this.tecnicoProfileService.create(userId, {
-            nombreCompleto: registerDto.nombre, // Mapeamos nombre a nombreCompleto
-            telefono: registerDto.telefono,
-            especialidad: registerDto.especialidad,
-            certificaciones: registerDto.certificaciones || [],
-          });
-          break;
-      }
-
-      // 5. Retornar respuesta exitosa
-      const userObject = newUser.toObject();
-      const { password, ...userWithoutPassword } = userObject;
-
-      return {
-        user: userWithoutPassword,
-        access_token: this.generateToken(userObject),
-      };
-
-    } catch (error) {
-      // ROLLBACK: Si falla la creación del perfil, borramos el usuario creado
-      // para evitar usuarios "huérfanos" sin perfil.
-      console.error('Error creando perfil, haciendo rollback del usuario:', error);
-      await this.userModel.findByIdAndDelete((newUser as any)._id);
-      throw error;
+    // Crear perfil asociado según el rol
+    if (rol === Role.CLIENTE) {
+      await this.clienteProfileModel.create({
+        usuario: user._id,
+        nombre,
+        telefono: profileData.telefono,
+        direccion: profileData.direccion,
+      });
+    } else if (rol === Role.TECNICO) {
+      await this.tecnicoProfileModel.create({
+        usuario: user._id,
+        nombre,
+        telefono: profileData.telefono,
+        especialidad: profileData.especialidad,
+        certificaciones: profileData.certificaciones,
+      });
     }
+
+    const token = this.jwtService.sign({ sub: user._id, email: user.email, role: rol });
+    return { authToken: token };
   }
 
   async login(loginDto: LoginDto) {
-    const user = await this.userModel.findOne({ email: loginDto.email }).select('+password');
+    const { email, password } = loginDto;
+    const user = await this.userModel.findOne({ email });
 
-    if (!user) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
-
-    const userObject = user.toObject();
-    const { password, ...userWithoutPassword } = userObject;
-
-    return {
-      user: userWithoutPassword,
-      access_token: this.generateToken(userObject),
-    };
+    const role = user.roles[0]; // Asumimos un rol principal
+    const token = this.jwtService.sign({ sub: user._id, email: user.email, role });
+    return { authToken: token };
   }
 
-  // Obtener solo datos de usuario (Auth)
-  async getProfile(userId: string) {
-    const user = await this.userModel.findById(userId);
-    if (!user) {
-      throw new UnauthorizedException('Usuario no encontrado');
-    }
-    const userObject = user.toObject();
-    const { password, ...userWithoutPassword } = userObject;
-    return userWithoutPassword;
-  }
+  // === MÉTODOS PARA PERFIL Y FOTO ===
 
-  // NUEVO: Obtener perfil completo fusionado (User + Profile) para Android
-  async getFullProfile(userId: string) {
-    const user = await this.userModel.findById(userId);
-    if (!user) {
-      throw new UnauthorizedException('Usuario no encontrado');
-    }
-
-    const userObject = user.toObject();
+  async getFullProfile(userPayload: any) {
+    const { userId, role, email } = userPayload;
     let profileData: any = {};
 
-    try {
-      // Obtener datos del profile según el rol
-      if (user.role === Role.CLIENTE) {
-        const clienteProfile = await this.clienteProfileService.findByUserId(userId);
-        if (clienteProfile) {
-          profileData = {
-            nombre: clienteProfile.nombre,
-            telefono: clienteProfile.telefono,
-            direccion: clienteProfile.direccion,
-          };
-        }
-      } else if (user.role === Role.TECNICO) {
-        const tecnicoProfile = await this.tecnicoProfileService.findByUserId(userId);
-        if (tecnicoProfile) {
-          profileData = {
-            nombre: tecnicoProfile.nombreCompleto,
-            telefono: tecnicoProfile.telefono,
-            especialidad: tecnicoProfile.especialidad,
-            certificaciones: tecnicoProfile.certificaciones || [],
-          };
-        }
-      }
-    } catch (error) {
-      console.error('Error al obtener profile:', error);
+    if (role === Role.CLIENTE) {
+      profileData = await this.clienteProfileModel.findOne({ usuario: userId }).lean();
+    } else if (role === Role.TECNICO) {
+      profileData = await this.tecnicoProfileModel.findOne({ usuario: userId }).lean();
     }
 
-    // Retornar objeto plano como lo espera la App Android
+    if (!profileData) {
+      return { id: userId, email, rol: role };
+    }
+
+    // Retornamos un objeto plano unificado para la App
     return {
-      _id: userObject._id,
-      email: userObject.email,
-      nombre: profileData.nombre || 'Sin nombre',
-      telefono: profileData.telefono || null,
-      rol: user.role, // Importante: devolvemos el rol
-      direccion: profileData.direccion || null,
-      especialidad: profileData.especialidad || null,
-      certificaciones: profileData.certificaciones || null,
-      activo: userObject.isActive,
-      createdAt: (userObject as any).createdAt,
-      updatedAt: (userObject as any).updatedAt,
+      id: userId,
+      email,
+      rol: role,
+      nombre: profileData.nombre,
+      telefono: profileData.telefono,
+      direccion: profileData.direccion,
+      especialidad: profileData.especialidad,
+      fotoPerfil: profileData.fotoPerfil, // Campo clave para la imagen
     };
   }
 
-  private generateToken(user: any): string {
-    const id = user._id ? user._id.toString() : (user as any).id;
+  async updateProfilePhoto(userPayload: any, photoUrl: string) {
+    const { userId, role } = userPayload;
+
+    if (role === Role.CLIENTE) {
+      await this.clienteProfileModel.findOneAndUpdate(
+        { usuario: userId },
+        { fotoPerfil: photoUrl }
+      );
+    } else if (role === Role.TECNICO) {
+      await this.tecnicoProfileModel.findOneAndUpdate(
+        { usuario: userId },
+        { fotoPerfil: photoUrl }
+      );
+    }
     
-    const payload = {
-      sub: id,
-      email: user.email,
-      role: user.role,
-    };
-    return this.jwtService.sign(payload);
-  }
-
-  async getAllUsers() {
-    const users = await this.userModel.find().select('-password');
-    return users;
+    // Devolvemos el perfil actualizado
+    return this.getFullProfile(userPayload);
   }
 }

@@ -9,35 +9,35 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { User, UserSchema } from './schemas/user.schema';
-import { ClienteProfileModule } from '../cliente-profile/cliente-profile.module';
-import { TecnicoProfileModule } from '../tecnico-profile/tecnico-profile.module';
+import { ClienteProfile, ClienteProfileSchema } from '../cliente-profile/schemas/cliente-profile.schema';
+import { TecnicoProfile, TecnicoProfileSchema } from '../tecnico-profile/schemas/tecnico-profile.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema }
+      { name: User.name, schema: UserSchema },
+      { name: ClienteProfile.name, schema: ClienteProfileSchema },
+      { name: TecnicoProfile.name, schema: TecnicoProfileSchema },
     ]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+        secret: configService.get<string>('JWT_SECRET', 'super-secret-key-change-in-production'),
         signOptions: {
           expiresIn: '24h',
         },
       }),
     }),
-    ClienteProfileModule,
-    TecnicoProfileModule,
   ],
   controllers: [AuthController],
   providers: [
     AuthService,
     JwtStrategy,
-    JwtAuthGuard,  // ← Solo como provider, NO como APP_GUARD
-    RolesGuard,    // ← Solo como provider, NO como APP_GUARD
+    JwtAuthGuard,
+    RolesGuard,
   ],
-  exports: [AuthService, JwtAuthGuard, RolesGuard],  // ← Exportar para usar en otros módulos
+  exports: [AuthService, JwtStrategy, JwtModule],
 })
 export class AuthModule {}
