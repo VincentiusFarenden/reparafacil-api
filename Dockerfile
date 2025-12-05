@@ -3,6 +3,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Instalar dependencias necesarias para compilar sharp
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    vips-dev \
+    pkgconfig
+
 # Copiar package files
 COPY package*.json ./
 
@@ -20,21 +28,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Instalar dependencias necesarias para sharp (procesamiento de imágenes)
+# Instalar dependencias de runtime para sharp
 RUN apk add --no-cache \
-    libc6-compat \
     vips-dev \
-    fftw-dev \
-    build-base \
-    python3 \
-    && rm -rf /var/cache/apk/*
+    vips
 
 # Copiar package files
 COPY package*.json ./
 
-# Instalar solo dependencias de producción
-RUN npm install -g node-gyp
-RUN npm ci --only=production
+# Instalar dependencias de producción
+RUN npm ci --only=production --ignore-scripts && \
+    npm rebuild sharp --ignore-scripts=false
 
 # Copiar build desde builder stage
 COPY --from=builder /app/dist ./dist
