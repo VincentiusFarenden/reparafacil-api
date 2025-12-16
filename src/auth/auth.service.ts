@@ -46,7 +46,7 @@ export class AuthService {
           direccion: profileData.direccion,
         });
       } else if (rol === Role.TECNICO) {
-        // CORRECCIÓN AQUÍ: Usamos 'nombreCompleto' que es lo que pide el schema
+        // CORRECCIÓN 1: Usamos 'nombreCompleto' que es lo que pide el schema de Técnico
         await this.tecnicoProfileModel.create({
           user: user._id,
           nombreCompleto: nombre, 
@@ -56,7 +56,6 @@ export class AuthService {
         });
       } else if (rol === Role.SOPORTE) {
         // SOPORTE no tiene Profile, solo User
-        // No hacemos nada adicional
       }
     } catch (error) {
       // ROLLBACK: Si falla crear el perfil, borramos el usuario para no dejar datos corruptos
@@ -88,7 +87,6 @@ export class AuthService {
     const { userId, role, email } = userPayload;
     let profileData: any = {};
 
-    // CORRECCIÓN: Usamos 'user' para buscar en la BD
     if (role === Role.CLIENTE) {
       profileData = await this.clienteProfileModel.findOne({ user: userId }).lean();
     } else if (role === Role.TECNICO) {
@@ -106,7 +104,8 @@ export class AuthService {
       id: userId,
       email,
       rol: role,
-      nombre: profileData.nombre || profileData.nombreCompleto, // Ajuste para leer ambos
+      // CORRECCIÓN 2: Leemos 'nombre' (Cliente) o 'nombreCompleto' (Técnico)
+      nombre: profileData.nombre || profileData.nombreCompleto, 
       telefono: profileData.telefono,
       direccion: profileData.direccion,
       especialidad: profileData.especialidad,
@@ -117,7 +116,6 @@ export class AuthService {
   async updateProfilePhoto(userPayload: any, photoUrl: string) {
     const { userId, role } = userPayload;
 
-    // CORRECCIÓN: Usamos 'user' para buscar y actualizar
     if (role === Role.CLIENTE) {
       await this.clienteProfileModel.findOneAndUpdate(
         { user: userId },
