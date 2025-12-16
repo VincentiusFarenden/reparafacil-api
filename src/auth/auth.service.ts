@@ -40,19 +40,22 @@ export class AuthService {
       // 2. Crear perfil asociado (CORREGIDO: 'user' en vez de 'usuario')
       if (rol === Role.CLIENTE) {
         await this.clienteProfileModel.create({
-          user: user._id, // <--- Aquí estaba el error
+          user: user._id,
           nombre,
           telefono: profileData.telefono,
           direccion: profileData.direccion,
         });
       } else if (rol === Role.TECNICO) {
         await this.tecnicoProfileModel.create({
-          user: user._id, // <--- Aquí estaba el error
+          user: user._id,
           nombre,
           telefono: profileData.telefono,
           especialidad: profileData.especialidad,
           certificaciones: profileData.certificaciones,
         });
+      } else if (rol === Role.SOPORTE) {
+        // SOPORTE no tiene Profile, solo User
+        // No hacemos nada adicional
       }
     } catch (error) {
       // ROLLBACK: Si falla crear el perfil, borramos el usuario para no dejar datos corruptos
@@ -89,6 +92,9 @@ export class AuthService {
       profileData = await this.clienteProfileModel.findOne({ user: userId }).lean();
     } else if (role === Role.TECNICO) {
       profileData = await this.tecnicoProfileModel.findOne({ user: userId }).lean();
+    } else if (role === Role.SOPORTE) {
+      // SOPORTE no tiene Profile, retornamos solo datos básicos
+      return { id: userId, email, rol: role };
     }
 
     if (!profileData) {
@@ -121,6 +127,10 @@ export class AuthService {
         { user: userId },
         { fotoPerfil: photoUrl }
       );
+    } else if (role === Role.SOPORTE) {
+      // SOPORTE no tiene Profile con foto
+      // Podrías guardar la foto en el User si quieres
+      throw new BadRequestException('Los usuarios SOPORTE no tienen foto de perfil');
     }
     
     return this.getFullProfile(userPayload);
