@@ -37,7 +37,7 @@ export class AuthService {
     });
 
     try {
-      // 2. Crear perfil asociado (CORREGIDO: 'user' en vez de 'usuario')
+      // 2. Crear perfil asociado
       if (rol === Role.CLIENTE) {
         await this.clienteProfileModel.create({
           user: user._id,
@@ -46,9 +46,10 @@ export class AuthService {
           direccion: profileData.direccion,
         });
       } else if (rol === Role.TECNICO) {
+        // CORRECCIÓN AQUÍ: Usamos 'nombreCompleto' que es lo que pide el schema
         await this.tecnicoProfileModel.create({
           user: user._id,
-          nombre,
+          nombreCompleto: nombre, 
           telefono: profileData.telefono,
           especialidad: profileData.especialidad,
           certificaciones: profileData.certificaciones,
@@ -105,7 +106,7 @@ export class AuthService {
       id: userId,
       email,
       rol: role,
-      nombre: profileData.nombre,
+      nombre: profileData.nombre || profileData.nombreCompleto, // Ajuste para leer ambos
       telefono: profileData.telefono,
       direccion: profileData.direccion,
       especialidad: profileData.especialidad,
@@ -128,8 +129,6 @@ export class AuthService {
         { fotoPerfil: photoUrl }
       );
     } else if (role === Role.SOPORTE) {
-      // SOPORTE no tiene Profile con foto
-      // Podrías guardar la foto en el User si quieres
       throw new BadRequestException('Los usuarios SOPORTE no tienen foto de perfil');
     }
     
