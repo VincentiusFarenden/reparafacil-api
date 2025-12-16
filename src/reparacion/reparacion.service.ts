@@ -16,7 +16,11 @@ export class ReparacionService {
       ...createReparacionDto,
       usuario: userId, // Asignamos la reparación al usuario del token
     });
-    return newReparacion.save();
+    
+    await newReparacion.save();
+    
+    // CORRECCIÓN 1: Populate inmediato para devolver el objeto completo al crear
+    return newReparacion.populate('usuario', 'nombre email telefono');
   }
 
   async findAll(): Promise<Reparacion[]> {
@@ -24,7 +28,11 @@ export class ReparacionService {
   }
 
   async findByCliente(userId: string): Promise<Reparacion[]> {
-    return this.reparacionModel.find({ usuario: userId }).exec();
+    // CORRECCIÓN 2: Agregamos populate aquí también para que el Cliente no reciba error GSON
+    return this.reparacionModel
+      .find({ usuario: userId })
+      .populate('usuario', 'nombre email telefono')
+      .exec();
   }
 
   async findOne(id: string): Promise<Reparacion> {
@@ -38,7 +46,9 @@ export class ReparacionService {
   async update(id: string, updateReparacionDto: UpdateReparacionDto): Promise<Reparacion> {
     const updated = await this.reparacionModel
       .findByIdAndUpdate(id, updateReparacionDto, { new: true })
+      .populate('usuario', 'nombre email telefono') // CORRECCIÓN 3: Populate al actualizar
       .exec();
+      
     if (!updated) {
       throw new NotFoundException(`Reparación con ID ${id} no encontrada`);
     }
